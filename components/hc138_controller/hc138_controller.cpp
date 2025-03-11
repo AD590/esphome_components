@@ -1,28 +1,43 @@
 #include "hc138_controller.h"
 
-HC138_Output::HC138_Output(uint8_t a0, uint8_t a1, uint8_t a2, uint8_t en) {
-  pins_[0] = a0;
-  pins_[1] = a1; 
-  pins_[2] = a2;
-  en_pin_ = en;
+namespace esphome {
+namespace hc138_controller {
+
+void HC138Controller::set_pins(uint8_t a0_pin, uint8_t a1_pin, uint8_t a2_pin, uint8_t en_pin) {
+  a0_pin_ = a0_pin;
+  a1_pin_ = a1_pin;
+  a2_pin_ = a2_pin;
+  en_pin_ = en_pin;
 }
 
-void HC138_Output::setup() {
-  for(int i=0; i<3; i++) pinMode(pins_[i], OUTPUT);
+void HC138Controller::set_channel_count(uint8_t channels) {
+  channels_ = std::min(channels, static_cast<uint8_t>(8));
+}
+
+void HC138Controller::setup() {
+  pinMode(a0_pin_, OUTPUT);
+  pinMode(a1_pin_, OUTPUT);
+  pinMode(a2_pin_, OUTPUT);
   pinMode(en_pin_, OUTPUT);
+  digitalWrite(en_pin_, LOW);  // 初始禁用输出
+}
+
+void HC138Controller::write_state(bool state) {
+  if (!state) {
+    digitalWrite(en_pin_, LOW);
+    return;
+  }
+  
+  if (current_channel_ >= channels_) {
+    ESP_LOGE("HC138", "Invalid channel %d (max %d)", current_channel_, channels_);
+    return;
+  }
+  
+  digitalWrite(a0_pin_, (current_channel_ & 0x01));
+  digitalWrite(a1_pin_, (current_channel_ & 0x02) >> 1);
+  digitalWrite(a2_pin_, (current_channel_ & 0x04) >> 2);
   digitalWrite(en_pin_, HIGH);
 }
 
-OutputChannel* HC138_Output::get_channel(uint8_t ch) {
-  return new OutputChannel([this, ch](bool state) {
-    if(ch != current_ch_) {
-      digitalWrite(en_pin_, LOW); // 关闭输出
-      digitalWrite(pins_[0], (ch & 0x01));
-      digitalWrite(pins_[1], (ch & 0x02) >> 1);
-      digitalWrite(pins_[2], (ch & 0x04) >> 2);
-      digitalWrite(en_pin_, HIGH); // 启用新通道
-      current_ch_ = ch;
-      delay(1); // 确保继电器稳定
-    }
-  });
-}
+}  // namespace hc138_controller
+}  // namespace esphome
